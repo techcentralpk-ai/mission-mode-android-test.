@@ -11,18 +11,16 @@ jobs:
       - name: Extract native Android project
         run: |
           python3 - <<'PY'
+          import base64, io, lzma, tarfile
           from pathlib import Path
-          from zipfile import ZipFile
-          archive=Path('Mission_Mode_Android_V1_Source_and_Free_APK_Builder.zip')
-          if not archive.exists():
-              raise SystemExit('Please upload Mission_Mode_Android_V1_Source_and_Free_APK_Builder.zip to the repository root, then re-run this workflow.')
-          with ZipFile(archive) as z:
-              assert z.testzip() is None, 'Damaged ZIP archive'
-              for name in z.namelist():
-                  assert not Path(name).is_absolute() and '..' not in Path(name).parts
-              z.extractall('.')
-          assert Path('app/build.gradle').exists(), 'Android source missing'
-          print('Native Android source extracted')
+          archive=base64.b64decode(Path("payload/android-source.b64").read_text().strip(),validate=True)
+          with tarfile.open(fileobj=io.BytesIO(lzma.decompress(archive))) as tar:
+              for item in tar.getmembers():
+                  p=Path(item.name)
+                  assert not p.is_absolute() and ".." not in p.parts, "Unsafe archive entry"
+              tar.extractall(".",filter="data")
+          assert Path("app/build.gradle").exists(), "Android project missing"
+          print("Android project extracted successfully")
           PY
       - uses: actions/setup-java@v4
         with:
@@ -32,9 +30,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Install Android platform
+      - name: Install Android SDK platform
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Compile Android APK
+      - name: Compile test APK
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
