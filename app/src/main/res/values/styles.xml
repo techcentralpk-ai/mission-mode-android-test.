@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.MissionMode" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F8F6F1</item>
+        <item name="android:navigationBarColor">#F8F6F1</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorAccent">#2E7867</item>
+    </style>
+</resources>
