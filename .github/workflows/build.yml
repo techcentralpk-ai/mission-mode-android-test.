@@ -6,35 +6,48 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Extract native Android project
         run: |
           python3 - <<'PY'
-          import base64, io, lzma, tarfile
+          import base64,io,lzma,tarfile
           from pathlib import Path
           archive=base64.b64decode(Path("payload/android-source.b64").read_text().strip(),validate=True)
           with tarfile.open(fileobj=io.BytesIO(lzma.decompress(archive))) as tar:
               for item in tar.getmembers():
                   p=Path(item.name)
-                  assert not p.is_absolute() and ".." not in p.parts, "Unsafe archive entry"
+                  assert not p.is_absolute() and ".." not in p.parts, "Unsafe source archive"
               tar.extractall(".",filter="data")
-          assert Path("app/build.gradle").exists(), "Android project missing"
-          print("Android project extracted successfully")
+          assert Path("app/build.gradle").is_file(), "Android project missing"
+          print("Android source extracted")
           PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Install Android SDK platform
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Install required SDK packages from preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          test -n "${ANDROID_HOME:-}" || { echo 'Runner Android SDK missing'; exit 1; }
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35" "build-tools;35.0.0"
       - name: Compile test APK
-        run: gradle --no-daemon :app:assembleDebug
-      - uses: actions/upload-artifact@v4
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
         with:
           name: MissionMode-Android-Test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
