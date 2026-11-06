@@ -15,18 +15,14 @@ jobs:
           python3 - <<'PY'
           import base64,io,lzma,tarfile
           from pathlib import Path
-          archive=base64.b64decode(Path("payload/android-source.b64").read_text().strip(),validate=True)
+          archive=base64.b64decode(Path("payload/android-source-v2.b64").read_text().strip(),validate=True)
           with tarfile.open(fileobj=io.BytesIO(lzma.decompress(archive))) as tar:
               for item in tar.getmembers():
                   p=Path(item.name)
                   assert not p.is_absolute() and ".." not in p.parts, "Unsafe source archive"
               tar.extractall(".",filter="data")
           assert Path("app/build.gradle").is_file(), "Android project missing"
-          java=Path("app/src/main/java/com/missionmode/android/MainActivity.java")
-          src=java.read_text()
-          assert "b.setTextAllCaps(false);" in src, "Expected initial source form changed"
-          java.write_text(src.replace("b.setTextAllCaps(false);",""))
-          print("Android source extracted and standard Button API corrected")
+          print("Mission Mode native v0.2 source extracted")
           PY
       - uses: actions/setup-java@v4
         with:
@@ -53,7 +49,7 @@ jobs:
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: MissionMode-Android-Test-APK
+          name: MissionMode-Android-V2-Test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
           if-no-files-found: error
