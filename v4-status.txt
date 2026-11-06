@@ -1,0 +1,1 @@
+Android v0.4 beta implementation ready for compilation. Contains four app selectors and intention tracking.
