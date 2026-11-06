@@ -1,4 +1,4 @@
-name: Build Mission Mode test APK
+name: Build Mission Mode Android V0.4 APK
 on:
   workflow_dispatch:
   push:
@@ -10,20 +10,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Extract native Android project
+      - name: Verify Android V0.4 sources
         run: |
-          python3 - <<'PY'
-          import base64,io,lzma,tarfile
-          from pathlib import Path
-          archive=base64.b64decode(Path("payload/android-source-v2.b64").read_text().strip(),validate=True)
-          with tarfile.open(fileobj=io.BytesIO(lzma.decompress(archive))) as tar:
-              for item in tar.getmembers():
-                  p=Path(item.name)
-                  assert not p.is_absolute() and ".." not in p.parts, "Unsafe source archive"
-              tar.extractall(".",filter="data")
-          assert Path("app/build.gradle").is_file(), "Android project missing"
-          print("Mission Mode native v0.2 source extracted")
-          PY
+          test -f app/build.gradle
+          test -f app/src/main/java/com/missionmode/android/TrackedApps.java
+          grep -q "versionName '0.4.0-test'" app/build.gradle
+          echo "Building native Android V0.4 sources from this repository"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -49,7 +41,7 @@ jobs:
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: MissionMode-Android-V2-Test-APK
+          name: MissionMode-Android-V4-Test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
           if-no-files-found: error
