@@ -8,20 +8,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract checked Android source
+      - name: Extract native Android project
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import lzma, tarfile, io, base64, hashlib
-          parts = [Path(f'payload/part{i}.txt').read_text().strip() for i in range(1,5)]
-          data = base64.b64decode(''.join(parts), validate=True)
-          expected = 'cc2e517d8ce000dffd2696536d0292cf1e97da495262b8c942049c023cff02fb'
-          assert hashlib.sha256(data).hexdigest() == expected, 'Source archive checksum mismatch'
-          with tarfile.open(fileobj=io.BytesIO(lzma.decompress(data))) as tar:
-              for member in tar.getmembers():
-                  assert '..' not in Path(member.name).parts
-              tar.extractall(path='.', filter='data')
-          print('Android source extracted')
+          from zipfile import ZipFile
+          archive=Path('Mission_Mode_Android_V1_Source_and_Free_APK_Builder.zip')
+          if not archive.exists():
+              raise SystemExit('Please upload Mission_Mode_Android_V1_Source_and_Free_APK_Builder.zip to the repository root, then re-run this workflow.')
+          with ZipFile(archive) as z:
+              assert z.testzip() is None, 'Damaged ZIP archive'
+              for name in z.namelist():
+                  assert not Path(name).is_absolute() and '..' not in Path(name).parts
+              z.extractall('.')
+          assert Path('app/build.gradle').exists(), 'Android source missing'
+          print('Native Android source extracted')
           PY
       - uses: actions/setup-java@v4
         with:
