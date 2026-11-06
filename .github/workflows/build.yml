@@ -22,7 +22,11 @@ jobs:
                   assert not p.is_absolute() and ".." not in p.parts, "Unsafe source archive"
               tar.extractall(".",filter="data")
           assert Path("app/build.gradle").is_file(), "Android project missing"
-          print("Android source extracted")
+          java=Path("app/src/main/java/com/missionmode/android/MainActivity.java")
+          src=java.read_text()
+          assert "b.setTextAllCaps(false);" in src, "Expected initial source form changed"
+          java.write_text(src.replace("b.setTextAllCaps(false);",""))
+          print("Android source extracted and standard Button API corrected")
           PY
       - uses: actions/setup-java@v4
         with:
