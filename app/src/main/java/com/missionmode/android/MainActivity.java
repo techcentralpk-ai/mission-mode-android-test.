@@ -563,9 +563,9 @@ public class MainActivity extends Activity {
         if(insightsDays==7)cal.add(Calendar.DAY_OF_YEAR,-6);
         long start=cal.getTimeInMillis();
         JSONArray history=MissionStore.history(this);
-        Map<String,Integer> purposes=new LinkedHashMap<>(),apps=new LinkedHashMap<>();
+        Map<String,Integer> purposes=new LinkedHashMap<>(),apps=new LinkedHashMap<>(),videos=new LinkedHashMap<>();
         for(String p:TrackedApps.PURPOSES)purposes.put(p,0);
-        for(TrackedApps.Entry a:TrackedApps.ALL)apps.put(a.name,0);
+        for(TrackedApps.Entry a:TrackedApps.ALL){apps.put(a.name,0);videos.put(a.name,0);}
         int count=0,achieved=0;long planned=0,elapsed=0;
         for(int i=0;i<history.length();i++){
             JSONObject s=history.optJSONObject(i);
@@ -574,6 +574,7 @@ public class MainActivity extends Activity {
             planned+=s.optInt("plannedMinutes",0);elapsed+=s.optLong("missionElapsedSeconds",0);
             String p=TrackedApps.cleanPurpose(s.optString("purpose"));purposes.put(p,purposes.get(p)+1);
             String app=TrackedApps.byName(s.optString("app")).name;apps.put(app,apps.get(app)+1);
+            videos.put(app,videos.get(app)+Math.max(0,s.optInt("manualVideos",0)));
         }
         LinearLayout summary=card();add(content,summary,13);
         add(summary,text(count+" recorded missions",25,INK,true),0);
@@ -593,6 +594,11 @@ public class MainActivity extends Activity {
         max=1;for(int v:apps.values())max=Math.max(max,v);
         for(Map.Entry<String,Integer> entry:apps.entrySet())addInsightBar(appChart,entry.getKey(),entry.getValue(),max);
         note(appChart,"Charts count missions you started and finished. They do not include ignored prompts or all app launches.");
+        LinearLayout videoChart=card();add(content,videoChart,14);
+        add(videoChart,text("Videos manually counted by app",19,INK,true),0);
+        int vMax=1;for(int v:videos.values())vMax=Math.max(vMax,v);
+        for(Map.Entry<String,Integer> item:videos.entrySet())addInsightBar(videoChart,item.getKey(),item.getValue(),vMax);
+        note(videoChart,"These are taps on the manual +1 counter, not automatically detected Reels, Stories, TikToks or Shorts.");
         if(insightsDays==7){
             LinearLayout activity=card();add(content,activity,14);
             add(activity,text("Daily mission activity",19,INK,true),0);
