@@ -68,7 +68,6 @@ public class MainActivity extends Activity {
             if(ring!=null){ring.invalidate();}
             if(s!=null && s.optLong("endAt")<=System.currentTimeMillis()){
                 if(MissionStore.markRemindedIfExpired(MainActivity.this)){
-                    MissionNotifications.expiry(MainActivity.this);
                     MonitorService.showExpiryOverlayIfVisible();
                 }
                 if(!renderedExpired && tab==HOME){show();}
@@ -90,7 +89,7 @@ public class MainActivity extends Activity {
         JSONObject pending=MissionStore.active(this);
         if(pending!=null){
             if(pending.optLong("endAt")>System.currentTimeMillis())MissionStore.scheduleAlarm(this,pending.optLong("endAt"));
-            if(MissionStore.markRemindedIfExpired(this))MissionNotifications.expiry(this);
+            MissionStore.markRemindedIfExpired(this);
         }
         show();tickHandler.removeCallbacks(tick);tickHandler.post(tick);
         if(MissionStore.wantsMonitoring(this)&&MissionStore.monitorReady(this))
