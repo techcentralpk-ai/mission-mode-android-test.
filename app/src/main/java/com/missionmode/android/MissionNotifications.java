@@ -91,6 +91,40 @@ public final class MissionNotifications {
         }else b.setShowWhen(false);
         notify(c,TIMER_ID,b.build());
     }
+    /** This inspects effective system state rather than assuming the channel is enabled. */
+    public static boolean canPostDeadline(Context c){
+        if(!MissionStore.notificationPermission(c))return false;
+        channels(c);
+        NotificationManager n=(NotificationManager)c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if(n==null)return false;
+        if(Build.VERSION.SDK_INT>=26){
+            NotificationChannel channel=n.getNotificationChannel(DEADLINE_CHANNEL);
+            return channel!=null && channel.getImportance()!=NotificationManager.IMPORTANCE_NONE;
+        }
+        return true;
+    }
+    public static void openDeadlineChannelSettings(Context c){
+        Intent i=new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,c.getPackageName())
+            .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,DEADLINE_CHANNEL)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try{c.startActivity(i);}catch(Exception ignored){}
+    }
+    /** Delivers an actual alert even when no mission is running, for on-device diagnosis. */
+    public static boolean testDeadline(Context c){
+        channels(c);
+        Notification n=new Notification.Builder(c,DEADLINE_CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("Mission Mode test: time is up")
+            .setContentText("If you see this, deadline notifications are allowed.")
+            .setPriority(Notification.PRIORITY_MAX)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setContentIntent(openPI(c)).setAutoCancel(true)
+            .build();
+        boolean posted=post(c,120,n);
+        MissionStore.recordNotificationResult(c,posted?"Test alert posted to Android":"Test blocked: check notification permission/channel");
+        return posted;
+    }
     public static void expiry(Context c){
         channels(c);JSONObject s=MissionStore.active(c);
         if(s==null)return;cancel(c,TIMER_ID);
@@ -105,13 +139,25 @@ public final class MissionNotifications {
             .setContentIntent(openPI(c)).setPriority(Notification.PRIORITY_MAX)
             .setDefaults(Notification.DEFAULT_ALL).setCategory(Notification.CATEGORY_REMINDER)
             .setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(false).build();
-        notify(c,EXPIRY_ID,n);
+        boolean posted=post(c,EXPIRY_ID,n);
+        MissionStore.recordNotificationResult(c,posted?
+            "Time-up notification accepted by Android (banner not guaranteed)":
+            "Time-up notification blocked or rejected");
     }
-    public static void notify(Context c,int id,Notification n){
-        if(!MissionStore.notificationPermission(c))return;
+    public static boolean post(Context c,int id,Notification n){
+        if(!MissionStore.notificationPermission(c))return false;
         NotificationManager m=(NotificationManager)c.getSystemService(Context.NOTIFICATION_SERVICE);
-        if(m!=null)try{m.notify(id,n);}catch(SecurityException ignored){}
+        if(m==null)return false;
+        try{
+            if(id==EXPIRY_ID||id==120){
+                NotificationChannel channel=m.getNotificationChannel(DEADLINE_CHANNEL);
+                if(channel==null||channel.getImportance()==NotificationManager.IMPORTANCE_NONE)return false;
+            }
+            m.notify(id,n);
+            return true;
+        }catch(Exception ignored){return false;}
     }
+    public static void notify(Context c,int id,Notification n){post(c,id,n);}
     public static void cancel(Context c,int id){
         NotificationManager m=(NotificationManager)c.getSystemService(Context.NOTIFICATION_SERVICE);
         if(m!=null)m.cancel(id);
