@@ -213,7 +213,11 @@ public class MainActivity extends Activity {
             countActions.addView(button("−1",false,()->{MissionStore.changeManualVideoCount(this,-1);MissionNotifications.countdown(this);show();}),new LinearLayout.LayoutParams(dp(78),dp(48)));
             countActions.addView(button("+1",false,()->{MissionStore.changeManualVideoCount(this,1);MissionNotifications.countdown(this);show();}),new LinearLayout.LayoutParams(dp(78),dp(48)));
             add(count,countActions,7);
-            add(count,text("Manual tally only. We cannot detect individual Reels or Shorts without invasive screen monitoring.",11,Color.rgb(214,234,227),false),7);
+            if("Instagram".equals(s.optString("app"))){
+                add(count,text("Estimated Reel transitions: "+s.optInt("estimatedReelTransitions",0),16,WHITE,true),7);
+                add(count,text("Experimental optional detection. Scroll estimate, not verified watch count.",11,Color.rgb(214,234,227),false),5);
+            }
+            add(count,text("Manual video tally is separate from estimated Reel transitions.",11,Color.rgb(214,234,227),false),7);
             add(hero,count,8);
             add(hero,button("I finished my mission",true,()->finish("achieved")),8);
             add(hero,button("Extend by 2 minutes",false,()->extend(2)),9);
@@ -266,7 +270,7 @@ public class MainActivity extends Activity {
             add(item,line,0);
             String date=new SimpleDateFormat("MMM d · h:mm a",Locale.getDefault()).format(new Date(x.optLong("finishedAt")));
             add(item,text(date+"    "+String.format(Locale.US,"%.1f",x.optLong("missionElapsedSeconds")/60.0)+" min",12,MUTED,false),8);
-            add(item,text("Short videos manually counted: "+x.optInt("manualVideos",0),12,MUTED,false),5);
+            add(item,text("Manual tally: "+x.optInt("manualVideos",0)+" · Estimated Reel transitions: "+x.optInt("estimatedReelTransitions",0),12,MUTED,false),5);
         }
         add(content,button("Clear history",false,()->new AlertDialog.Builder(this)
             .setTitle("Delete all mission history?").setMessage("Records are stored only on this device. This cannot be undone.")
@@ -324,6 +328,36 @@ public class MainActivity extends Activity {
                 show();
             }),10);
         }
+        LinearLayout reels=card();add(content,reels,15);
+        add(reels,text("Instagram Reel transitions (experimental)",19,INK,true),0);
+        note(reels,"Optional Accessibility-based estimate, not a verified view count. Only counts candidate vertical Reels transitions during an active Instagram mission. Cannot count unique videos, watch completion, or other apps.");
+        add(reels,pill(MissionStore.reelDetectionConsent(this)?"EXPERIMENT ENABLED":"EXPERIMENT OFF",
+            MissionStore.reelDetectionConsent(this)?SOFT:Color.rgb(255,240,231),
+            MissionStore.reelDetectionConsent(this)?GREEN:CORAL),12);
+        if(!MissionStore.reelDetectionConsent(this)){
+            add(reels,button("Enable experimental Reel detection",false,()->{
+                new AlertDialog.Builder(this)
+                    .setTitle("Optional Instagram Reel experiment")
+                    .setMessage("Android Accessibility permission can expose sensitive on-screen content across apps, including banking apps. Mission Mode filters events to Instagram, examines short navigation labels and scroll distances locally, and does not store or upload screen text, messages, screenshots, or banking content. This is an ESTIMATE, not a true number of watched or completed Reels. The operating-system permission remains broader than our code filter. Do you agree to enable this optional feature?")
+                    .setNegativeButton("No thanks",null)
+                    .setPositiveButton("I agree",(d,w)->{
+                        MissionStore.setReelDetectionConsent(this,true);
+                        try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}
+                        catch(Exception ex){toast("Open Android Accessibility Settings manually.");}
+                    }).show();
+            }),12);
+        }else{
+            add(reels,button("Open Android Accessibility settings",false,()->{
+                try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}
+                catch(Exception ex){toast("Open Android Accessibility Settings manually.");}
+            }),10);
+            add(reels,button("Turn off Reel experiment",false,()->{
+                MissionStore.setReelDetectionConsent(this,false);
+                toast("Local Reel estimation disabled. Revoke Accessibility in Android Settings too.");
+                show();
+            }),9);
+        }
+        note(reels,"Turn this off any time. For full removal, also disable the Mission Mode accessibility service in Android Settings.");
         LinearLayout overlayCard=card();add(content,overlayCard,15);
         add(overlayCard,text("On-screen pop-ups",20,INK,true),0);
         note(overlayCard,"Optional. Shows the purpose and timer selector over whichever monitored app is foreground. The card hides when you leave it.");
@@ -340,7 +374,7 @@ public class MainActivity extends Activity {
         add(test,button("Open Android notification settings",false,this::openAppSettings),9);
         note(test,"On Vivo phones, enable Autostart and allow background activity for Mission Mode. Force Stop always prevents monitoring until the app is opened again.");
         add(content,text("Privacy: Missions remain on this device. Usage Access exposes app-usage events at Android level, but Mission Mode keeps no histories of other apps and reads no messages or banking content.",12,MUTED,false),18);
-        add(content,text("Private test build 0.5 · No account · No internet",11,MUTED,false),12);
+        add(content,text("Private test build 0.6 · No account · No internet",11,MUTED,false),12);
     }
     private void maybeStartMonitor(){
         if(MissionStore.wantsMonitoring(this)&&MissionStore.monitorReady(this)&&!MonitorService.running){
@@ -577,6 +611,7 @@ public class MainActivity extends Activity {
         long start=cal.getTimeInMillis();
         JSONArray history=MissionStore.history(this);
         Map<String,Integer> purposes=new LinkedHashMap<>(),apps=new LinkedHashMap<>(),videos=new LinkedHashMap<>();
+        int estimatedReelTransitions=0;
         for(String p:TrackedApps.PURPOSES)purposes.put(p,0);
         for(TrackedApps.Entry a:TrackedApps.ALL){apps.put(a.name,0);videos.put(a.name,0);}
         int count=0,achieved=0;long planned=0,elapsed=0;
@@ -588,6 +623,7 @@ public class MainActivity extends Activity {
             String p=TrackedApps.cleanPurpose(s.optString("purpose"));purposes.put(p,purposes.get(p)+1);
             String app=TrackedApps.byName(s.optString("app")).name;apps.put(app,apps.get(app)+1);
             videos.put(app,videos.get(app)+Math.max(0,s.optInt("manualVideos",0)));
+            if("Instagram".equals(app))estimatedReelTransitions+=Math.max(0,s.optInt("estimatedReelTransitions",0));
         }
         LinearLayout summary=card();add(content,summary,13);
         add(summary,text(count+" recorded missions",25,INK,true),0);
@@ -607,6 +643,10 @@ public class MainActivity extends Activity {
         max=1;for(int v:apps.values())max=Math.max(max,v);
         for(Map.Entry<String,Integer> entry:apps.entrySet())addInsightBar(appChart,entry.getKey(),entry.getValue(),max);
         note(appChart,"Charts count missions you started and finished. They do not include ignored prompts or all app launches.");
+        LinearLayout estimated=card();add(content,estimated,14);
+        add(estimated,text("Instagram · experimental Reels estimate",18,INK,true),0);
+        add(estimated,text(String.valueOf(estimatedReelTransitions),28,GREEN,true),8);
+        note(estimated,"Estimated scrolling transitions in recorded Instagram missions. Not unique videos watched, video completions, or verified Reels views.");
         LinearLayout videoChart=card();add(content,videoChart,14);
         add(videoChart,text("Videos manually counted by app",19,INK,true),0);
         int vMax=1;for(int v:videos.values())vMax=Math.max(vMax,v);
