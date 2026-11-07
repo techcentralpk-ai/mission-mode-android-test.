@@ -33,6 +33,7 @@ public class MissionReceiver extends BroadcastReceiver {
         }else if(DISMISS.equals(action)){
             MissionNotifications.cancel(c,MissionNotifications.OPEN_ID);MonitorService.dismissOverlay();
         }else if(EXPIRE.equals(action)){
+            MissionStore.recordAlarmFired(c);
             if(MissionStore.markRemindedIfExpired(c)){
                 MissionNotifications.expiry(c);MonitorService.showExpiryOverlayIfVisible();
             }
