@@ -69,6 +69,15 @@ final class PromptOverlay {
             if(active!=null)add(card,label(active.optString("purpose")+" · "+active.optInt("plannedMinutes",5)+" min planned",15,WHITE,true),11);
             add(card,button("I finished",true,()->broadcast(MissionReceiver.FINISH,null,null,0)),16);
             add(card,button("Extend 2 minutes",false,()->broadcast(MissionReceiver.EXTEND,null,null,0)),8);
+            add(card,button("Leave the social app",false,()->{
+                broadcast(MissionReceiver.FINISH,null,null,0);
+                try{
+                    Intent home=new Intent(Intent.ACTION_MAIN);
+                    home.addCategory(Intent.CATEGORY_HOME);
+                    home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    c.startActivity(home);
+                }catch(Exception ignored){}
+            }),8);
             add(card,button("I got distracted",false,()->broadcast(MissionReceiver.DISTRACTED,null,null,0)),8);
         }else{
             final String[] purpose={MissionStore.defaultPurposeFor(c,app)};
