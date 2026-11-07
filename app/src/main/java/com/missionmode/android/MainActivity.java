@@ -286,6 +286,20 @@ public class MainActivity extends Activity {
         add(c,text(beat==0?"No background heartbeat yet":"Last background heartbeat: "+new SimpleDateFormat("MMM d, h:mm:ss a",Locale.getDefault()).format(new Date(beat)),12,MUTED,false),6);
         note(c,"If monitoring is stopped, Android cannot detect app openings. Some Vivo phones require background autostart and unrestricted battery use, even with a foreground notification.");
         add(c,text("Precise time reminders: "+(MissionStore.canUsePreciseAlarm(this)?"Available":"Permission needed"),13,MissionStore.canUsePreciseAlarm(this)?GREEN:CORAL,true),8);
+        add(c,text("Time-up notification channel: "+(MissionNotifications.canPostDeadline(this)?"Allowed":"Blocked"),13,MissionNotifications.canPostDeadline(this)?GREEN:CORAL,true),8);
+        add(c,button("TEST time-up notification now",true,()->{
+            boolean posted=MissionNotifications.testDeadline(this);
+            toast(posted?"Android accepted the test. Check your notification shade.":"Blocked. Open the Time is up notification settings.");
+            show();
+        }),10);
+        add(c,button("Open time-up notification settings",false,()->MissionNotifications.openDeadlineChannelSettings(this)),8);
+        long lastAlarm=MissionStore.lastAlarmFired(this);
+        add(c,text("Last alarm receiver: "+(lastAlarm==0?"Never":new SimpleDateFormat("MMM d, h:mm:ss a",Locale.getDefault()).format(new Date(lastAlarm))),12,MUTED,false),9);
+        long nextAlarm=MissionStore.lastScheduledDeadline(this);
+        add(c,text("Last scheduled deadline: "+(nextAlarm==0?"None":new SimpleDateFormat("MMM d, h:mm:ss a",Locale.getDefault()).format(new Date(nextAlarm))),12,MUTED,false),6);
+        add(c,text("Alarm status: "+MissionStore.lastAlarmScheduleStatus(this),12,MUTED,false),6);
+        add(c,text("Notification result: "+MissionStore.lastNotificationResult(this),12,MUTED,false),6);
+        note(c,"A posted notification may be silent or appear only in the shade. Enable banner/pop-up alerts for the Time is up channel in Android settings. Do Not Disturb may suppress alerts.");
         if(!MissionStore.canUsePreciseAlarm(this))add(c,button("Allow precise 5-minute reminders",false,this::requestPreciseAlarms),10);
         note(c,"Monitoring can continue after the screen is closed and restart after ordinary process kills or reboot if Android allows it. Force Stop disables background monitoring until you manually reopen Mission Mode.");
         add(c,button("Open background battery settings",false,this::openBatterySettings),12);
