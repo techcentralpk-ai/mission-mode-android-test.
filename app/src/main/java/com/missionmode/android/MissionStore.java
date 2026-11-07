@@ -52,6 +52,21 @@ public final class MissionStore {
         try{s.put("manualVideos",count);s.put("videoCountSource","manually_tallied");putActive(c,s);return true;}
         catch(Exception ignored){return false;}
     }
+    /** On-device diagnostics for user-visible deadline reminders. */
+    public static void recordAlarmFired(Context c){
+        prefs(c).edit().putLong("lastAlarmFired",System.currentTimeMillis()).apply();
+    }
+    public static long lastAlarmFired(Context c){return prefs(c).getLong("lastAlarmFired",0);}
+    public static void recordNotificationResult(Context c,String result){
+        prefs(c).edit().putString("lastNotificationResult",result)
+            .putLong("lastNotificationAttempt",System.currentTimeMillis()).apply();
+    }
+    public static String lastNotificationResult(Context c){
+        return prefs(c).getString("lastNotificationResult","No time-up alert attempted");
+    }
+    public static long lastNotificationAttempt(Context c){return prefs(c).getLong("lastNotificationAttempt",0);}
+    public static long lastScheduledDeadline(Context c){return prefs(c).getLong("lastScheduledDeadline",0);}
+    public static String lastAlarmScheduleStatus(Context c){return prefs(c).getString("alarmScheduleStatus","Not scheduled");}
     public static boolean wantsOverlay(Context c){return prefs(c).getBoolean("overlayWanted",false)&&PromptOverlay.allowed(c);}
     public static void setWantsOverlay(Context c,boolean yes){prefs(c).edit().putBoolean("overlayWanted",yes).apply();}
     public static boolean appEnabled(Context c,String app){
@@ -110,6 +125,11 @@ public final class MissionStore {
     public static synchronized boolean markRemindedIfExpired(Context c){
         JSONObject s=active(c);
         if(s==null||s.optLong("endAt")>System.currentTimeMillis()||s.optLong("remindedAt")>0)return false;
+        // Do not record a reminder as delivered when its channel has been blocked.
+        if(!MissionNotifications.canPostDeadline(c)){
+            recordNotificationResult(c,"Blocked: notifications or time-up channel disabled");
+            return false;
+        }
         try{s.put("remindedAt",System.currentTimeMillis());}catch(Exception ignored){}
         putActive(c,s);return true;
     }
@@ -137,15 +157,31 @@ public final class MissionStore {
         return PendingIntent.getBroadcast(c,321,i,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
     public static void scheduleAlarm(Context c,long endAtWallclock){
-        AlarmManager am=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);if(am==null)return;
+        AlarmManager am=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+        if(am==null){
+            prefs(c).edit().putString("alarmScheduleStatus","Alarm service unavailable").apply();
+            return;
+        }
+        prefs(c).edit().putLong("lastScheduledDeadline",endAtWallclock).apply();
         long delay=Math.max(1000,endAtWallclock-System.currentTimeMillis());
         long when=SystemClock.elapsedRealtime()+delay;
         // Exact delivery is optional and requires user-approved Alarms & reminders access on API 31+.
         // If declined, use Android's inexact idle-safe scheduler and communicate that it can be late.
         try{
-            if(canUsePreciseAlarm(c))am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));
+            boolean precise=canUsePreciseAlarm(c);
+            if(precise)am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));
             else am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));
-        }catch(SecurityException denied){am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));}
+            prefs(c).edit().putString("alarmScheduleStatus",precise?"Precise alarm scheduled":"Inexact alarm scheduled; may be late").apply();
+        }catch(SecurityException denied){
+            try{
+                am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));
+                prefs(c).edit().putString("alarmScheduleStatus","Precise permission refused; inexact fallback").apply();
+            }catch(Exception e){
+                prefs(c).edit().putString("alarmScheduleStatus","Alarm rejected: "+e.getClass().getSimpleName()).apply();
+            }
+        }catch(Exception e){
+            prefs(c).edit().putString("alarmScheduleStatus","Alarm failed: "+e.getClass().getSimpleName()).apply();
+        }
     }
     private static void cancelAlarm(Context c){AlarmManager am=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);if(am!=null)am.cancel(alarmPI(c));}
 }
