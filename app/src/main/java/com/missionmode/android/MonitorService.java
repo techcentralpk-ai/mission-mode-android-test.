@@ -32,7 +32,6 @@ public class MonitorService extends Service {
             if(scanTime-MissionStore.lastHeartbeat(MonitorService.this)>15000)MissionStore.setHeartbeat(MonitorService.this,scanTime);
             try{scanRecentEvents();}catch(Exception ignored){}
             if(MissionStore.markRemindedIfExpired(MonitorService.this)){
-                MissionNotifications.expiry(MonitorService.this);
                 showExpiryIfVisible();
             }
             JSONObject s=MissionStore.active(MonitorService.this);
@@ -59,8 +58,8 @@ public class MonitorService extends Service {
         if(lastEventTimestamp==0)lastEventTimestamp=System.currentTimeMillis()-4000;
         handler.removeCallbacks(tick);handler.post(tick);
         // Recover a missed deadline immediately when Android recreates this service.
-        if(MissionStore.markRemindedIfExpired(this))MissionNotifications.expiry(this);
-        else MissionNotifications.countdown(this);
+        MissionStore.markRemindedIfExpired(this);
+        MissionNotifications.countdown(this);
         return START_STICKY;
     }
     private void scanRecentEvents(){
