@@ -11,11 +11,12 @@ public class BootReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context c,Intent i){
         if(i==null)return;
         String action=i.getAction();
-        if(!Intent.ACTION_BOOT_COMPLETED.equals(action) && !Intent.ACTION_MY_PACKAGE_REPLACED.equals(action))return;
+        if(!Intent.ACTION_BOOT_COMPLETED.equals(action) && !Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)
+                && !android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED.equals(action))return;
+        JSONObject active=MissionStore.active(c);
+        if(active!=null)MissionStore.scheduleAlarm(c,active.optLong("endAt"));
         if(!MissionStore.wantsMonitoring(c)||!MissionStore.monitorReady(c))return;
         try{
-            JSONObject active=MissionStore.active(c);
-            if(active!=null)MissionStore.scheduleAlarm(c,active.optLong("endAt"));
             Intent service=new Intent(c,MonitorService.class);
             if(Build.VERSION.SDK_INT>=26)c.startForegroundService(service);
             else c.startService(service);
