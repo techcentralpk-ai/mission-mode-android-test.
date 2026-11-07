@@ -67,6 +67,25 @@ public final class MissionStore {
     public static long lastNotificationAttempt(Context c){return prefs(c).getLong("lastNotificationAttempt",0);}
     public static long lastScheduledDeadline(Context c){return prefs(c).getLong("lastScheduledDeadline",0);}
     public static String lastAlarmScheduleStatus(Context c){return prefs(c).getString("alarmScheduleStatus","Not scheduled");}
+    /** Explicit, opt-in experimental Instagram Reel transition estimate. */
+    public static boolean reelDetectionConsent(Context c){
+        return prefs(c).getBoolean("reelExperimentalOptIn",false);
+    }
+    public static void setReelDetectionConsent(Context c,boolean enable){
+        prefs(c).edit().putBoolean("reelExperimentalOptIn",enable).commit();
+    }
+    public static synchronized boolean recordEstimatedReelTransition(Context c){
+        if(!reelDetectionConsent(c))return false;
+        JSONObject session=active(c);
+        if(session==null||!"Instagram".equals(session.optString("app"))
+                ||session.optLong("endAt")<=System.currentTimeMillis())return false;
+        try{
+            session.put("estimatedReelTransitions",Math.min(10000,session.optInt("estimatedReelTransitions",0)+1));
+            session.put("reelEstimateSource","accessibility_scroll_heuristic");
+            putActive(c,session);
+            return true;
+        }catch(Exception e){return false;}
+    }
     public static boolean wantsOverlay(Context c){return prefs(c).getBoolean("overlayWanted",false)&&PromptOverlay.allowed(c);}
     public static void setWantsOverlay(Context c,boolean yes){prefs(c).edit().putBoolean("overlayWanted",yes).apply();}
     public static boolean appEnabled(Context c,String app){
@@ -107,6 +126,8 @@ public final class MissionStore {
             session.put("startAt",now);session.put("endAt",now+(long)minutes*60000L);
             session.put("plannedMinutes",minutes);session.put("extensions",0);
             session.put("manualVideos",0);session.put("videoCountSource","manually_tallied");
+            session.put("estimatedReelTransitions",0);
+            session.put("reelEstimateSource","accessibility_scroll_heuristic");
             session.put("source",source);session.put("remindedAt",0);
         }catch(Exception e){return false;}
         putActive(c,session);
