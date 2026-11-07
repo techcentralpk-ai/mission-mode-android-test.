@@ -67,9 +67,16 @@ final class PromptOverlay {
         if(expired){
             JSONObject active=MissionStore.active(c);
             if(active!=null)add(card,label(active.optString("purpose")+" · "+active.optInt("plannedMinutes",5)+" min planned",15,WHITE,true),11);
-            add(card,button("I finished",true,()->broadcast(MissionReceiver.FINISH,null,null,0)),16);
-            add(card,button("Extend 2 minutes",false,()->broadcast(MissionReceiver.EXTEND,null,null,0)),8);
-            add(card,button("Leave the social app",false,()->{
+            // Two compact action rows prevent the last button from falling below the screen.
+            LinearLayout topActions=row();
+            TextView finish=button("Finished",true,()->broadcast(MissionReceiver.FINISH,null,null,0));
+            TextView extend=button("+2 minutes",false,()->broadcast(MissionReceiver.EXTEND,null,null,0));
+            topActions.addView(finish,new LinearLayout.LayoutParams(0,dp(45),1));
+            LinearLayout.LayoutParams extendParams=new LinearLayout.LayoutParams(0,dp(45),1);
+            extendParams.leftMargin=dp(8);topActions.addView(extend,extendParams);
+            add(card,topActions,14);
+            LinearLayout bottomActions=row();
+            TextView leave=button("Leave app",false,()->{
                 broadcast(MissionReceiver.FINISH,null,null,0);
                 try{
                     Intent home=new Intent(Intent.ACTION_MAIN);
@@ -77,8 +84,12 @@ final class PromptOverlay {
                     home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     c.startActivity(home);
                 }catch(Exception ignored){}
-            }),8);
-            add(card,button("I got distracted",false,()->broadcast(MissionReceiver.DISTRACTED,null,null,0)),8);
+            });
+            TextView distracted=button("Distracted",false,()->broadcast(MissionReceiver.DISTRACTED,null,null,0));
+            bottomActions.addView(leave,new LinearLayout.LayoutParams(0,dp(45),1));
+            LinearLayout.LayoutParams distractParams=new LinearLayout.LayoutParams(0,dp(45),1);
+            distractParams.leftMargin=dp(8);bottomActions.addView(distracted,distractParams);
+            add(card,bottomActions,8);
         }else{
             final String[] purpose={MissionStore.defaultPurposeFor(c,app)};
             final int[] mins={MissionStore.defaultMinutes(c)};
@@ -153,10 +164,10 @@ final class PromptOverlay {
         ScrollView scroller=new ScrollView(c);scroller.setFillViewport(false);scroller.setVerticalScrollBarEnabled(false);scroller.addView(card);
         WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
             c.getResources().getDisplayMetrics().widthPixels-dp(26),
-            Math.min(dp(expired?340:680),(int)(c.getResources().getDisplayMetrics().heightPixels*.78f)),
+            Math.min(dp(expired?305:680),(int)(c.getResources().getDisplayMetrics().heightPixels*(expired?.65f:.76f))),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,PixelFormat.TRANSLUCENT);
-        lp.gravity=Gravity.TOP|Gravity.CENTER_HORIZONTAL;lp.y=dp(40);
+        lp.gravity=expired?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;lp.y=expired?0:dp(10);
         lp.softInputMode=WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
         try{wm.addView(scroller,lp);attached=scroller;showing=key;}catch(Exception ignored){attached=null;showing="";}
     }
