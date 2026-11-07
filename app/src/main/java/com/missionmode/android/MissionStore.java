@@ -122,16 +122,25 @@ public final class MissionStore {
             putActive(c,s);scheduleAlarm(c,newEnd);return true;
         }catch(Exception e){return false;}
     }
+    /**
+     * Only store remindedAt once Android accepted the deadline notification.
+     * This is shared by the alarm receiver, monitor service and foreground UI.
+     * Posting is not proof of a visible heads-up banner; Android owns presentation.
+     */
     public static synchronized boolean markRemindedIfExpired(Context c){
-        JSONObject s=active(c);
-        if(s==null||s.optLong("endAt")>System.currentTimeMillis()||s.optLong("remindedAt")>0)return false;
-        // Do not record a reminder as delivered when its channel has been blocked.
+        JSONObject session=active(c);
+        if(session==null||session.optLong("endAt")>System.currentTimeMillis()
+                ||session.optLong("remindedAt")>0)return false;
         if(!MissionNotifications.canPostDeadline(c)){
             recordNotificationResult(c,"Blocked: notifications or time-up channel disabled");
             return false;
         }
-        try{s.put("remindedAt",System.currentTimeMillis());}catch(Exception ignored){}
-        putActive(c,s);return true;
+        boolean posted=MissionNotifications.expiry(c);
+        if(!posted)return false;
+        try{session.put("remindedAt",System.currentTimeMillis());}
+        catch(Exception ignored){return false;}
+        putActive(c,session);
+        return true;
     }
     public static synchronized boolean finishMission(Context c,String outcome){
         JSONObject s=active(c);if(s==null)return false;
