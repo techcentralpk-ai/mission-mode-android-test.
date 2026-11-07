@@ -125,9 +125,9 @@ public final class MissionNotifications {
         MissionStore.recordNotificationResult(c,posted?"Test alert posted to Android":"Test blocked: check notification permission/channel");
         return posted;
     }
-    public static void expiry(Context c){
+    public static boolean expiry(Context c){
         channels(c);JSONObject s=MissionStore.active(c);
-        if(s==null)return;cancel(c,TIMER_ID);
+        if(s==null)return false;
         Notification n=new Notification.Builder(c,DEADLINE_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setColor(Color.rgb(241,106,85))
             .setContentTitle("Your time is up. Leave or extend?")
@@ -143,6 +143,8 @@ public final class MissionNotifications {
         MissionStore.recordNotificationResult(c,posted?
             "Time-up notification accepted by Android (banner not guaranteed)":
             "Time-up notification blocked or rejected");
+        if(posted)cancel(c,TIMER_ID);
+        return posted;
     }
     public static boolean post(Context c,int id,Notification n){
         if(!MissionStore.notificationPermission(c))return false;
