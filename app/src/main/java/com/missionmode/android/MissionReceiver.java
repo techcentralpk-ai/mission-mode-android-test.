@@ -15,6 +15,7 @@ public class MissionReceiver extends BroadcastReceiver {
     public static final String EXTEND="com.missionmode.EXTEND";
     public static final String FINISH="com.missionmode.FINISH";
     public static final String DISTRACTED="com.missionmode.DISTRACTED";
+    public static final String COUNT_VIDEO="com.missionmode.COUNT_VIDEO";
     @Override public void onReceive(Context c,Intent intent){
         if(intent==null)return;String action=intent.getAction();
         if(START.equals(action)){
@@ -27,6 +28,8 @@ public class MissionReceiver extends BroadcastReceiver {
             MissionNotifications.cancel(c,MissionNotifications.OPEN_ID);
             MissionNotifications.countdown(c);
             MonitorService.dismissOverlay();
+        }else if(COUNT_VIDEO.equals(action)){
+            if(MissionStore.changeManualVideoCount(c,1))MissionNotifications.countdown(c);
         }else if(DISMISS.equals(action)){
             MissionNotifications.cancel(c,MissionNotifications.OPEN_ID);MonitorService.dismissOverlay();
         }else if(EXPIRE.equals(action)){
