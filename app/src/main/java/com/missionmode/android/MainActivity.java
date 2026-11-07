@@ -38,6 +38,9 @@ import java.util.LinkedHashMap;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.Switch;
+import android.view.accessibility.AccessibilityManager;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.text.SimpleDateFormat;
@@ -46,12 +49,15 @@ import java.util.Locale;
 
 /** A native, on-device dashboard. No account, web view, analytics or network calls. */
 public class MainActivity extends Activity {
-    private static final int BG=Color.rgb(247,248,245), INK=Color.rgb(24,44,50), MUTED=Color.rgb(106,122,125),
-        CORAL=Color.rgb(239,111,89), GREEN=Color.rgb(41,124,102), WHITE=Color.WHITE,
-        BORDER=Color.rgb(228,233,231), NAVY=Color.rgb(28,54,62), SOFT=Color.rgb(235,245,240);
+    private static final int BG=Color.rgb(241,246,247), INK=Color.rgb(21,42,55), MUTED=Color.rgb(78,100,112),
+        CORAL=Color.rgb(231,96,76), GREEN=Color.rgb(26,113,100), WHITE=Color.WHITE,
+        BORDER=Color.rgb(212,227,230), NAVY=Color.rgb(25,54,69), SOFT=Color.rgb(224,243,237);
     private static final int HOME=0,INSIGHTS=1,HISTORY=2,SETTINGS=3;
     private int tab=HOME;
     private LinearLayout content;
+    private ScrollView screenScroll;
+    private int lastRenderedTab=-1;
+    private int settingsCardIndex=0;
     private ProgressRing ring;
     private int selectedMinutes=5;
     private String selectedApp="Instagram",selectedPurpose="Reply to messages";
@@ -123,7 +129,16 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=dp(top);parent.addView(v,p);
     }
     private void addWeight(LinearLayout parent,View v,float weight){parent.addView(v,new LinearLayout.LayoutParams(0,-2,weight));}
-    private LinearLayout card(){LinearLayout v=column();v.setPadding(dp(19),dp(19),dp(19),dp(19));v.setBackground(border(WHITE,22,BORDER));return v;}
+    private LinearLayout card(){
+        LinearLayout v=column();v.setPadding(dp(19),dp(19),dp(19),dp(19));
+        if(tab==SETTINGS){
+            int[] fills={0xFFE7F4F0,0xFFF1F3FC,0xFFFFF1E9,0xFFEEEFF9,0xFFEAF4F8,0xFFF0F5F1};
+            int[] strokes={0xFFBDDDD3,0xFFD1D8F2,0xFFF4CEBD,0xFFD3D2EC,0xFFC7DCE6,0xFFC8DDD1};
+            int idx=settingsCardIndex++%fills.length;
+            v.setBackground(border(fills[idx],22,strokes[idx]));
+        }else v.setBackground(border(WHITE,22,BORDER));
+        return v;
+    }
     private TextView pill(String s,int bgColor,int textColor){
         TextView t=text(s,11,textColor,true);t.setGravity(Gravity.CENTER);t.setPadding(dp(12),dp(7),dp(12),dp(7));t.setBackground(bg(bgColor,40));return t;
     }
@@ -134,13 +149,15 @@ public class MainActivity extends Activity {
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(primary?0x44FFFFFF:0x2299AAAA),shape,null));
         b.setClickable(true);b.setFocusable(true);b.setOnClickListener(v->callback.run());return b;
     }
-    private void note(LinearLayout c,String s){add(c,text(s,12,MUTED,false),8);}
+    private void note(LinearLayout c,String s){add(c,text(s,13,MUTED,false),8);}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
     private void title(String overline,String headline){
         add(content,spaced(overline,11,GREEN),24);
         add(content,text(headline,25,INK,true),5);
     }
     private void show(){
+        final int previousScroll=(screenScroll!=null&&lastRenderedTab==tab)?screenScroll.getScrollY():0;
+        settingsCardIndex=0;
         ring=null;renderedExpired=false;
         manualStartButton=null;manualMinutesEntry=null;presetChips.clear();presetValues.clear();
         selectedMinutes=MissionStore.defaultMinutes(this);
@@ -158,15 +175,18 @@ public class MainActivity extends Activity {
         add(brand,text("Mission Mode",19,INK,true),0);
         add(brand,text("Open with purpose.",12,MUTED,false),1);
         header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        header.addView(pill("BETA 0.5",SOFT,GREEN));
+        header.addView(pill("BETA 0.7",SOFT,GREEN));
         root.addView(header,new LinearLayout.LayoutParams(-1,-2));
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
         content=column();content.setPadding(dp(20),dp(8),dp(20),dp(32));
         scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        screenScroll=scroll;
+        lastRenderedTab=tab;
         if(tab==HOME)home();else if(tab==INSIGHTS)insights();else if(tab==HISTORY)history();else settings();
         root.addView(nav(),new LinearLayout.LayoutParams(-1,dp(76)));
         setContentView(root);
+        if(previousScroll>0)scroll.post(()->scroll.scrollTo(0,previousScroll));
     }
     private View nav(){
         LinearLayout bar=row();bar.setPadding(dp(12),dp(5),dp(12),dp(6));bar.setBackground(border(WHITE,0,BORDER));
@@ -277,8 +297,16 @@ public class MainActivity extends Activity {
             .setNegativeButton("Cancel",null).setPositiveButton("Delete",(d,w)->{MissionStore.clearHistory(this);show();}).show()),20);
     }
     private void settings(){
-        title("YOUR CONTROLS","Make it your own.");
-        LinearLayout c=card();add(content,c,15);
+        title("CONTROL CENTER","Your focus, your rules.");
+        LinearLayout banner=column();banner.setBackground(grad(22));
+        banner.setPadding(dp(19),dp(20),dp(19),dp(20));
+        add(content,banner,14);
+        add(banner,spaced("YOUR DIGITAL SPACE",11,0xFFB8E4D8),0);
+        add(banner,text("Simple controls. Real progress.",21,WHITE,true),8);
+        add(banner,text("Choose what to monitor, fine-tune your reminders and stay in control of permissions.",14,0xFFE1F0EB,false),9);
+        LinearLayout c=card();add(content,c,16);
+        add(c,spaced("01   MONITORING & PERMISSIONS",11,GREEN),0);
+        add(c,text("Automatic social app detection",20,INK,true),8);
         add(c,text("Automatic social app detection",20,INK,true),0);
         note(c,"Detect selected app openings without Accessibility. Choose the apps below. Monitoring is optional and has a persistent notification.");
         boolean usage=MissionStore.usagePermission(this),notify=MissionStore.notificationPermission(this);
@@ -316,20 +344,48 @@ public class MainActivity extends Activity {
         long last=MissionStore.lastDetection(this);
         note(c,last>0?"Last monitored app opening: "+new SimpleDateFormat("MMM d, h:mm:ss a",Locale.getDefault()).format(new Date(last)):"No monitored app opening recorded yet.");
         LinearLayout appSettings=card();add(content,appSettings,15);
-        add(appSettings,text("Apps to monitor",20,INK,true),0);
-        note(appSettings,"Instagram is enabled initially. Enable TikTok, Snapchat and YouTube individually. Only installed native apps can be detected.");
+        add(appSettings,spaced("02   APPS TO MONITOR",11,GREEN),0);
+        add(appSettings,text("Choose your platforms",20,INK,true),8);
+        note(appSettings,"Switch each app on or off instantly. No restart and no jumping back to the top.");
         for(TrackedApps.Entry entry:TrackedApps.ALL){
             final String app=entry.name;
             boolean on=MissionStore.appEnabled(this,app);
-            add(appSettings,button((on?"●  ":"○  ")+app+(on?"  ·  ON":"  ·  OFF"),false,()->{
-                MissionStore.setAppEnabled(this,app,!MissionStore.appEnabled(this,app));
-                if(MonitorService.running){stopService(new Intent(this,MonitorService.class));
-                    getWindow().getDecorView().postDelayed(this::maybeStartMonitor,300);}
-                show();
-            }),10);
+            int accent="Instagram".equals(app)?0xFFB65A7B:("TikTok".equals(app)?0xFF226E82:("Snapchat".equals(app)?0xFF977321:0xFFC45442));
+            String description="Instagram".equals(app)?"Reels and messages":
+                ("TikTok".equals(app)?"Short videos":("Snapchat".equals(app)?"Stories and chats":"Videos and Shorts"));
+            LinearLayout item=row();
+            item.setPadding(dp(12),dp(12),dp(12),dp(12));
+            item.setBackground(border(WHITE,16,BORDER));
+            TextView avatar=text(app.substring(0,1),19,WHITE,true);
+            avatar.setGravity(Gravity.CENTER);avatar.setBackground(bg(accent,13));
+            item.addView(avatar,new LinearLayout.LayoutParams(dp(43),dp(43)));
+            LinearLayout detail=column();detail.setPadding(dp(10),0,dp(5),0);
+            add(detail,text(app,16,INK,true),0);
+            add(detail,text(description,12,MUTED,false),2);
+            item.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
+            Switch control=new Switch(this);
+            control.setContentDescription("Monitor "+app);
+            control.setChecked(on);
+            control.setText(on?"ON":"OFF");
+            control.setTextColor(on?GREEN:MUTED);
+            control.setTextSize(12);
+            control.setThumbTintList(ColorStateList.valueOf(on?GREEN:0xFF8197A0));
+            control.setTrackTintList(ColorStateList.valueOf(on?0xFF95CEC1:0xFFD1DADF));
+            control.setOnCheckedChangeListener((buttonView,enabled)->{
+                MissionStore.setAppEnabled(this,app,enabled);
+                control.setText(enabled?"ON":"OFF");
+                control.setTextColor(enabled?GREEN:MUTED);
+                control.setThumbTintList(ColorStateList.valueOf(enabled?GREEN:0xFF8197A0));
+                control.setTrackTintList(ColorStateList.valueOf(enabled?0xFF95CEC1:0xFFD1DADF));
+                if(MonitorService.running)MissionNotifications.notify(this,
+                    MissionNotifications.MONITOR_ID,MissionNotifications.monitor(this));
+            });
+            item.addView(control,new LinearLayout.LayoutParams(-2,dp(48)));
+            add(appSettings,item,10);
         }
         LinearLayout reels=card();add(content,reels,15);
-        add(reels,text("Instagram Reel transitions (experimental)",19,INK,true),0);
+        add(reels,spaced("03   REEL EXPERIMENT",11,GREEN),0);
+        add(reels,text("Instagram Reel transitions",20,INK,true),8);
         note(reels,"Optional Accessibility-based estimate, not a verified view count. Only counts candidate vertical Reels transitions during an active Instagram mission. Cannot count unique videos, watch completion, or other apps.");
         add(reels,pill(MissionStore.reelDetectionConsent(this)?"EXPERIMENT ENABLED":"EXPERIMENT OFF",
             MissionStore.reelDetectionConsent(this)?SOFT:Color.rgb(255,240,231),
@@ -359,7 +415,8 @@ public class MainActivity extends Activity {
         }
         note(reels,"Turn this off any time. For full removal, also disable the Mission Mode accessibility service in Android Settings.");
         LinearLayout overlayCard=card();add(content,overlayCard,15);
-        add(overlayCard,text("On-screen pop-ups",20,INK,true),0);
+        add(overlayCard,spaced("04   FLOATING REMINDERS",11,GREEN),0);
+        add(overlayCard,text("On-screen pop-ups",20,INK,true),8);
         note(overlayCard,"Optional. Shows the purpose and timer selector over whichever monitored app is foreground. The card hides when you leave it.");
         add(overlayCard,pill(MissionStore.wantsOverlay(this)?"POP-UPS ENABLED":"NOT ENABLED",MissionStore.wantsOverlay(this)?SOFT:Color.rgb(255,240,231),MissionStore.wantsOverlay(this)?GREEN:CORAL),12);
         if(MissionStore.wantsOverlay(this)){
@@ -369,12 +426,13 @@ public class MainActivity extends Activity {
         }
         note(overlayCard,"Android's Display over other apps permission is separate from Accessibility. Some banking apps may flag overlays. You can keep pop-ups off and use notifications instead.");
         LinearLayout test=card();add(content,test,15);
-        add(test,text("Test & troubleshoot",19,INK,true),0);
+        add(test,spaced("05   CHECK & TROUBLESHOOT",11,GREEN),0);
+        add(test,text("Test & troubleshoot",20,INK,true),8);
         add(test,button("Send a test notification",false,()->{MissionNotifications.prompt(this,MissionStore.selectedApp(this));toast("Test reminder sent. This does not prove opening detection.");}),13);
         add(test,button("Open Android notification settings",false,this::openAppSettings),9);
         note(test,"On Vivo phones, enable Autostart and allow background activity for Mission Mode. Force Stop always prevents monitoring until the app is opened again.");
         add(content,text("Privacy: Missions remain on this device. Usage Access exposes app-usage events at Android level, but Mission Mode keeps no histories of other apps and reads no messages or banking content.",12,MUTED,false),18);
-        add(content,text("Private test build 0.6 · No account · No internet",11,MUTED,false),12);
+        add(content,text("Private test build 0.7 · No account · No internet",11,MUTED,false),12);
     }
     private void maybeStartMonitor(){
         if(MissionStore.wantsMonitoring(this)&&MissionStore.monitorReady(this)&&!MonitorService.running){
