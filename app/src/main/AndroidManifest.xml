@@ -10,7 +10,7 @@
     <!-- Optional; explicitly granted by the user only if they want a pop-up over Instagram. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <!-- No INTERNET, QUERY_ALL_PACKAGES, Accessibility, or exact alarm permission. -->
+    <!-- No INTERNET or QUERY_ALL_PACKAGES permissions. Accessibility is optional through an OS-approved service. -->
 
     <queries>
         <package android:name="com.instagram.android" />
@@ -46,6 +46,19 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-enabled digital wellbeing monitor for four selected social apps, using foreground activity events for user-requested reminders." />
+        </service>
+
+        <!-- Optional and explicitly consented experimental Instagram Reel transition estimator.
+             Android Accessibility permission is broader than this package filter. -->
+        <service android:name=".ReelAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            android:label="Mission Mode experimental Instagram Reel counter">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/reel_accessibility_config"/>
         </service>
 
         <receiver
