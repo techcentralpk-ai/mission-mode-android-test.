@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.app.AppOpsManager;
 import android.os.Process;
 import android.app.NotificationManager;
+import android.provider.Settings;
 import android.os.Build;
 import android.Manifest;
 import android.content.pm.PackageManager;
@@ -35,6 +36,22 @@ public final class MissionStore {
         return true;
     }
     public static boolean monitorReady(Context c){return usagePermission(c)&&notificationPermission(c);}
+    /** Optional Android special access; user must approve in system settings. */
+    public static boolean canUsePreciseAlarm(Context c){
+        if(Build.VERSION.SDK_INT<31)return true;
+        AlarmManager am=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+        return am!=null&&am.canScheduleExactAlarms();
+    }
+    /** A saved status indicator helps distinguish system service stops from usage-detection errors. */
+    public static void setHeartbeat(Context c,long now){prefs(c).edit().putLong("heartbeat",now).apply();}
+    public static long lastHeartbeat(Context c){return prefs(c).getLong("heartbeat",0);}
+    public static synchronized int manualVideoCount(Context c){JSONObject x=active(c);return x==null?0:x.optInt("manualVideos",0);}
+    public static synchronized boolean changeManualVideoCount(Context c,int delta){
+        JSONObject s=active(c);if(s==null)return false;
+        int count=Math.max(0,Math.min(10000,s.optInt("manualVideos",0)+delta));
+        try{s.put("manualVideos",count);s.put("videoCountSource","manually_tallied");putActive(c,s);return true;}
+        catch(Exception ignored){return false;}
+    }
     public static boolean wantsOverlay(Context c){return prefs(c).getBoolean("overlayWanted",false)&&PromptOverlay.allowed(c);}
     public static void setWantsOverlay(Context c,boolean yes){prefs(c).edit().putBoolean("overlayWanted",yes).apply();}
     public static boolean appEnabled(Context c,String app){
@@ -74,6 +91,7 @@ public final class MissionStore {
             session.put("id",String.valueOf(now));session.put("purpose",intent);session.put("app",app);
             session.put("startAt",now);session.put("endAt",now+(long)minutes*60000L);
             session.put("plannedMinutes",minutes);session.put("extensions",0);
+            session.put("manualVideos",0);session.put("videoCountSource","manually_tallied");
             session.put("source",source);session.put("remindedAt",0);
         }catch(Exception e){return false;}
         putActive(c,session);
@@ -121,7 +139,13 @@ public final class MissionStore {
     public static void scheduleAlarm(Context c,long endAtWallclock){
         AlarmManager am=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);if(am==null)return;
         long delay=Math.max(1000,endAtWallclock-System.currentTimeMillis());
-        am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,SystemClock.elapsedRealtime()+delay,alarmPI(c));
+        long when=SystemClock.elapsedRealtime()+delay;
+        // Exact delivery is optional and requires user-approved Alarms & reminders access on API 31+.
+        // If declined, use Android's inexact idle-safe scheduler and communicate that it can be late.
+        try{
+            if(canUsePreciseAlarm(c))am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));
+            else am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));
+        }catch(SecurityException denied){am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,when,alarmPI(c));}
     }
     private static void cancelAlarm(Context c){AlarmManager am=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);if(am!=null)am.cancel(alarmPI(c));}
 }
