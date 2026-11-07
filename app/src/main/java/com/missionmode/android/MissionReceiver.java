@@ -35,7 +35,7 @@ public class MissionReceiver extends BroadcastReceiver {
         }else if(EXPIRE.equals(action)){
             MissionStore.recordAlarmFired(c);
             if(MissionStore.markRemindedIfExpired(c)){
-                MissionNotifications.expiry(c);MonitorService.showExpiryOverlayIfVisible();
+                MonitorService.showExpiryOverlayIfVisible();
             }
         }else if(EXTEND.equals(action)){
             int min=MissionStore.validatedMinutes(intent.getIntExtra(EXTRA_MINUTES,2));
