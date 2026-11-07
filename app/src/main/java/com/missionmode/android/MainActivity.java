@@ -296,6 +296,37 @@ public class MainActivity extends Activity {
             .setTitle("Delete all mission history?").setMessage("Records are stored only on this device. This cannot be undone.")
             .setNegativeButton("Cancel",null).setPositiveButton("Delete",(d,w)->{MissionStore.clearHistory(this);show();}).show()),20);
     }
+    private boolean reelServiceEnabledByAndroid(){
+        try{
+            AccessibilityManager manager=(AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);
+            if(manager==null)return false;
+            for(AccessibilityServiceInfo service:manager.getEnabledAccessibilityServiceList(
+                    AccessibilityServiceInfo.FEEDBACK_ALL_MASK)){
+                if(service.getResolveInfo()!=null && service.getResolveInfo().serviceInfo!=null
+                        && getPackageName().equals(service.getResolveInfo().serviceInfo.packageName)
+                        && service.getResolveInfo().serviceInfo.name.endsWith("ReelAccessibilityService"))return true;
+            }
+        }catch(Exception ignored){}
+        return false;
+    }
+    private void openReelAccessibilityGuide(){
+        String instructions="1. On most Android phones, open Accessibility, then Downloaded apps or Installed services.\n\n"
+            +"2. On Vivo, try Shortcuts & accessibility > Accessibility > Downloaded apps or Installed services.\n\n"
+            +"3. Select 'Mission Mode experimental Instagram Reel counter'.\n\n"
+            +"4. Enable 'Use service' and review the Android warning before choosing Allow.\n\n"
+            +"5. Return to Mission Mode. The section below will show whether Android has enabled the service.\n\n"
+            +"Accessibility is a broad system permission, including potential access to sensitive screens. "
+            +"Only enable this optional experiment if you accept that risk. Disabling the experiment inside Mission Mode "
+            +"stops counting, but you must also turn off the Android service to revoke its access.";
+        new AlertDialog.Builder(this)
+            .setTitle("How to enable Reel detection")
+            .setMessage(instructions)
+            .setNegativeButton("Not now",null)
+            .setPositiveButton("Open Android Settings",(d,w)->{
+                try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}
+                catch(Exception ex){toast("Please open Accessibility in Android Settings.");}
+            }).show();
+    }
     private void settings(){
         title("CONTROL CENTER","Your focus, your rules.");
         LinearLayout banner=column();banner.setBackground(grad(22));
@@ -387,9 +418,13 @@ public class MainActivity extends Activity {
         add(reels,spaced("03   REEL EXPERIMENT",11,GREEN),0);
         add(reels,text("Instagram Reel transitions",20,INK,true),8);
         note(reels,"Optional Accessibility-based estimate, not a verified view count. Only counts candidate vertical Reels transitions during an active Instagram mission. Cannot count unique videos, watch completion, or other apps.");
-        add(reels,pill(MissionStore.reelDetectionConsent(this)?"EXPERIMENT ENABLED":"EXPERIMENT OFF",
-            MissionStore.reelDetectionConsent(this)?SOFT:Color.rgb(255,240,231),
-            MissionStore.reelDetectionConsent(this)?GREEN:CORAL),12);
+        boolean reelEnabled=MissionStore.reelDetectionConsent(this),reelPermission=reelServiceEnabledByAndroid();
+        add(reels,pill(!reelEnabled?"EXPERIMENT OFF":reelPermission?"ACTIVE":"SETUP INCOMPLETE",
+            reelEnabled&&reelPermission?SOFT:Color.rgb(255,240,231),
+            reelEnabled&&reelPermission?GREEN:CORAL),12);
+        add(reels,text("Android accessibility service: "+(reelPermission?"Enabled":"Not enabled"),13,
+            reelPermission?GREEN:CORAL,true),10);
+        note(reels,"Setup: Accessibility > Downloaded apps / Installed services > Mission Mode experimental Instagram Reel counter > Use service > Allow.");
         if(!MissionStore.reelDetectionConsent(this)){
             add(reels,button("Enable experimental Reel detection",false,()->{
                 new AlertDialog.Builder(this)
@@ -398,19 +433,20 @@ public class MainActivity extends Activity {
                     .setNegativeButton("No thanks",null)
                     .setPositiveButton("I agree",(d,w)->{
                         MissionStore.setReelDetectionConsent(this,true);
-                        try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}
-                        catch(Exception ex){toast("Open Android Accessibility Settings manually.");}
+                        openReelAccessibilityGuide();
                     }).show();
             }),12);
         }else{
-            add(reels,button("Open Android Accessibility settings",false,()->{
-                try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}
-                catch(Exception ex){toast("Open Android Accessibility Settings manually.");}
-            }),10);
+            add(reels,button(reelPermission?"Review Accessibility access":"Finish Accessibility setup",
+                false,this::openReelAccessibilityGuide),10);
             add(reels,button("Turn off Reel experiment",false,()->{
                 MissionStore.setReelDetectionConsent(this,false);
-                toast("Local Reel estimation disabled. Revoke Accessibility in Android Settings too.");
-                show();
+                new AlertDialog.Builder(this).setTitle("Reel estimation disabled")
+                    .setMessage("The experimental counter is off. To revoke Android's broad Accessibility permission too, open Accessibility > Installed services or Downloaded apps > Mission Mode experimental Instagram Reel counter and switch it off.")
+                    .setNegativeButton("Later",(d,w)->show())
+                    .setPositiveButton("Open Settings",(d,w)->{
+                        show();openReelAccessibilityGuide();
+                    }).show();
             }),9);
         }
         note(reels,"Turn this off any time. For full removal, also disable the Mission Mode accessibility service in Android Settings.");
