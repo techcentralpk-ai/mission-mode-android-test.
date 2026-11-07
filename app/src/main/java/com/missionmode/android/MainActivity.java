@@ -86,7 +86,13 @@ public class MainActivity extends Activity {
         show();getWindow().getDecorView().post(this::maybeWelcome);
     }
     @Override protected void onResume(){
-        super.onResume();maybeStartMonitor();show();tickHandler.removeCallbacks(tick);tickHandler.post(tick);
+        super.onResume();maybeStartMonitor();
+        JSONObject pending=MissionStore.active(this);
+        if(pending!=null){
+            if(pending.optLong("endAt")>System.currentTimeMillis())MissionStore.scheduleAlarm(this,pending.optLong("endAt"));
+            if(MissionStore.markRemindedIfExpired(this))MissionNotifications.expiry(this);
+        }
+        show();tickHandler.removeCallbacks(tick);tickHandler.post(tick);
         if(MissionStore.wantsMonitoring(this)&&MissionStore.monitorReady(this))
             getWindow().getDecorView().post(this::offerOptionalPopup);
     }
@@ -153,7 +159,7 @@ public class MainActivity extends Activity {
         add(brand,text("Mission Mode",19,INK,true),0);
         add(brand,text("Open with purpose.",12,MUTED,false),1);
         header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        header.addView(pill("BETA 0.4",SOFT,GREEN));
+        header.addView(pill("BETA 0.5",SOFT,GREEN));
         root.addView(header,new LinearLayout.LayoutParams(-1,-2));
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
         content=column();content.setPadding(dp(20),dp(8),dp(20),dp(32));
@@ -199,6 +205,17 @@ public class MainActivity extends Activity {
             add(hero,text(expired?"Did you finish?":"Stay on your mission.",27,WHITE,true),12);
             add(hero,text(s.optString("app","Instagram")+" · "+s.optString("purpose","Reply to messages"),14,Color.rgb(214,234,227),false),5);
             ring=new ProgressRing(s);hero.addView(ring,new LinearLayout.LayoutParams(-1,dp(214)));
+            LinearLayout count=column();count.setPadding(dp(13),dp(12),dp(13),dp(12));
+            count.setBackground(bg(Color.rgb(47,88,80),15));
+            add(count,text("SHORT VIDEOS MANUALLY COUNTED",10,Color.rgb(191,235,216),true),0);
+            LinearLayout countActions=row();
+            TextView countNow=text(String.valueOf(s.optInt("manualVideos",0)),28,WHITE,true);
+            countActions.addView(countNow,new LinearLayout.LayoutParams(0,-2,1));
+            countActions.addView(button("−1",false,()->{MissionStore.changeManualVideoCount(this,-1);MissionNotifications.countdown(this);show();}),new LinearLayout.LayoutParams(dp(78),dp(48)));
+            countActions.addView(button("+1",false,()->{MissionStore.changeManualVideoCount(this,1);MissionNotifications.countdown(this);show();}),new LinearLayout.LayoutParams(dp(78),dp(48)));
+            add(count,countActions,7);
+            add(count,text("Manual tally only. We cannot detect individual Reels or Shorts without invasive screen monitoring.",11,Color.rgb(214,234,227),false),7);
+            add(hero,count,8);
             add(hero,button("I finished my mission",true,()->finish("achieved")),8);
             add(hero,button("Extend by 2 minutes",false,()->extend(2)),9);
             add(hero,button("Extend by 5 minutes",false,()->extend(5)),9);
@@ -250,6 +267,7 @@ public class MainActivity extends Activity {
             add(item,line,0);
             String date=new SimpleDateFormat("MMM d · h:mm a",Locale.getDefault()).format(new Date(x.optLong("finishedAt")));
             add(item,text(date+"    "+String.format(Locale.US,"%.1f",x.optLong("missionElapsedSeconds")/60.0)+" min",12,MUTED,false),8);
+            add(item,text("Short videos manually counted: "+x.optInt("manualVideos",0),12,MUTED,false),5);
         }
         add(content,button("Clear history",false,()->new AlertDialog.Builder(this)
             .setTitle("Delete all mission history?").setMessage("Records are stored only on this device. This cannot be undone.")
@@ -264,8 +282,14 @@ public class MainActivity extends Activity {
         add(c,text("Usage Access: "+(usage?"Allowed":"Not allowed"),13,usage?GREEN:CORAL,true),14);
         add(c,text("Notifications: "+(notify?"Allowed":"Not allowed"),13,notify?GREEN:CORAL,true),6);
         add(c,text("Monitoring: "+(MonitorService.running?"Running":"Stopped"),13,MonitorService.running?GREEN:MUTED,true),6);
+        long beat=MissionStore.lastHeartbeat(this);
+        add(c,text(beat==0?"No background heartbeat yet":"Last background heartbeat: "+new SimpleDateFormat("MMM d, h:mm:ss a",Locale.getDefault()).format(new Date(beat)),12,MUTED,false),6);
+        note(c,"If monitoring is stopped, Android cannot detect app openings. Some Vivo phones require background autostart and unrestricted battery use, even with a foreground notification.");
+        add(c,text("Precise time reminders: "+(MissionStore.canUsePreciseAlarm(this)?"Available":"Permission needed"),13,MissionStore.canUsePreciseAlarm(this)?GREEN:CORAL,true),8);
+        if(!MissionStore.canUsePreciseAlarm(this))add(c,button("Allow precise 5-minute reminders",false,this::requestPreciseAlarms),10);
         note(c,"Monitoring can continue after the screen is closed and restart after ordinary process kills or reboot if Android allows it. Force Stop disables background monitoring until you manually reopen Mission Mode.");
-        add(c,button("Open app battery / background settings",false,this::openAppSettings),12);
+        add(c,button("Open background battery settings",false,this::openBatterySettings),12);
+        add(c,button("Open Mission Mode app permissions",false,this::openAppSettings),8);
         if(MissionStore.wantsMonitoring(this)){
             add(c,button("Stop automatic detection",false,this::disableMonitor),17);
             if(!usage)add(c,button("Grant Usage Access",true,this::requestUsage),8);
@@ -303,7 +327,7 @@ public class MainActivity extends Activity {
         add(test,button("Open Android notification settings",false,this::openAppSettings),9);
         note(test,"On Vivo phones, enable Autostart and allow background activity for Mission Mode. Force Stop always prevents monitoring until the app is opened again.");
         add(content,text("Privacy: Missions remain on this device. Usage Access exposes app-usage events at Android level, but Mission Mode keeps no histories of other apps and reads no messages or banking content.",12,MUTED,false),18);
-        add(content,text("Private test build 0.4 · No account · No internet",11,MUTED,false),12);
+        add(content,text("Private test build 0.5 · No account · No internet",11,MUTED,false),12);
     }
     private void maybeStartMonitor(){
         if(MissionStore.wantsMonitoring(this)&&MissionStore.monitorReady(this)&&!MonitorService.running){
@@ -346,6 +370,20 @@ public class MainActivity extends Activity {
             }).show();
     }
     private void openAppSettings(){startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));}
+    private void openBatterySettings(){
+        try{startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));}
+        catch(Exception ignored){openAppSettings();}
+    }
+    private void requestPreciseAlarms(){
+        if(Build.VERSION.SDK_INT<31||MissionStore.canUsePreciseAlarm(this)){toast("Precise alarms are available.");return;}
+        new AlertDialog.Builder(this).setTitle("Remind me when time is up")
+            .setMessage("Android may delay inexact alarms when your phone saves battery. You can choose Alarms & reminders access for more accurate mission deadlines. This permission is optional, and the monitoring service will still check the timer while running.")
+            .setNegativeButton("Later",null)
+            .setPositiveButton("Open Settings",(d,w)->{
+                try{startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName())));}
+                catch(Exception ignored){openAppSettings();}
+            }).show();
+    }
     private void launchSelectedApp(String app){
         try{Intent intent=TrackedApps.launch(this,app);
             if(intent==null){toast(app+" isn't installed. Install it before starting a mission.");return;}
